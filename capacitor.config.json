@@ -1,0 +1,6 @@
+{
+  "appId": "com.yourcompany.docstransfer",
+  "appName": "Docs",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

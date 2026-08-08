@@ -13,6 +13,7 @@ ios/
 # Build artifacts
 dist/
 build/
+www/app.bundle.js
 
 # OS/editor cruft
 .DS_Store

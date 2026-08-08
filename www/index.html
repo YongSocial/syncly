@@ -443,6 +443,15 @@
   }
   .pick-file-btn:active { background:#262626; }
   .pick-file-btn svg { width:18px; height:18px; fill:#eae3dd; }
+  .or-divider { text-align:center; color:#6a6a6e; font-size:13px; margin:14px 0 2px; }
+  .scan-btn {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin:0 20px; padding:14px;
+    background:transparent; border:1px solid #333; border-radius:14px;
+    font-size:15px; color:#eae3dd; text-align:center;
+  }
+  .scan-btn:active { background:#1a1a1a; }
+  .scan-btn svg { width:18px; height:18px; fill:#eae3dd; }
   .transfer-status { text-align:center; padding:10px 20px; font-size:13.5px; color:#9a9a9e; }
   .status-block { text-align:center; padding:0 30px 8px; }
   .status-title { font-size:19px; font-weight:600; margin-bottom:10px; color:#f2f2f2; }
@@ -647,8 +656,16 @@
       Choose a file to send
     </label>
     <input type="file" id="filePicker" style="display:none" onchange="handleFilePicked(event)" />
+
+    <div class="or-divider">or</div>
+
+    <div class="scan-btn" onclick="startScan()">
+      <svg viewBox="0 0 256 256"><path d="M56,64H88a8,8,0,0,0,0-16H56A16,16,0,0,0,40,64V96a8,8,0,0,0,16,0Zm144-16H168a8,8,0,0,0,0,16h32V96a8,8,0,0,0,16,0V64A16,16,0,0,0,200,48ZM88,192H56V160a8,8,0,0,0-16,0v32a16,16,0,0,0,16,16H88a8,8,0,0,0,0-16Zm120-40a8,8,0,0,0-8,8v32H168a8,8,0,0,0,0,16h32a16,16,0,0,0,16-16V160A8,8,0,0,0,208,152ZM80,96a8,8,0,0,0-8,8v64a8,8,0,0,0,16,0V104A8,8,0,0,0,80,96Zm96,0a8,8,0,0,0-8,8v64a8,8,0,0,0,16,0V104A8,8,0,0,0,176,96Zm-32,8a8,8,0,0,0-16,0v48a8,8,0,0,0,16,0Z"/></svg>
+      Scan a code to receive
+    </div>
   </div>
   <div id="transferStatus" class="transfer-status"></div>
+
 
   <!-- NOTEPAD -->
   <div id="notepadScreen">
@@ -663,122 +680,9 @@
     <textarea id="notepadBody" class="notepad-body" placeholder="Start typing..."></textarea>
   </div>
 
-  <script type="module">
-    import { WebRTCTransfer } from './webrtc/client.js';
+  <script src="app.bundle.js" defer></script>
 
-    // Point this at your deployed signaling server.
-    const SIGNALING_URL = 'wss://syncly-signaling-oyjq.onrender.com';
-
-    const transfer = new WebRTCTransfer(SIGNALING_URL, {
-      onRoomCreated: (code) => {
-        renderQrCode(code);
-        setStatus('Share this code', 'Waiting for the other device to join...');
-      },
-      onPeerJoined: () => setStatus('Connecting...', ''),
-      onStatus: (text) => {
-        setStatus(text, '');
-        if (text === 'Connected — ready to send' && selectedFile) {
-          sendSelectedFile();
-        }
-      },
-      onProgress: ({ bytesSent, totalBytes }) => {
-        const pct = totalBytes ? Math.round((bytesSent / totalBytes) * 100) : 0;
-        setTransferStatus(`Transferring... ${pct}%`);
-      },
-      onFileReceived: ({ name, blob }) => {
-        setTransferStatus('File received: ' + name);
-        // Offer it as a download in-browser; on native you'd instead
-        // write `blob` to disk via Capacitor's Filesystem plugin.
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        a.click();
-      },
-    });
-
-    let connected = false;
-    let selectedFile = null;
-
-    async function openSend() {
-      document.getElementById('sendScreen').classList.add('open');
-      setStatus('Connecting to server...', '');
-      if (!connected) {
-        await transfer.connect();
-        connected = true;
-      }
-      await transfer.createRoom();
-    }
-
-    async function closeSend() {
-      document.getElementById('sendScreen').classList.remove('open');
-      transfer.close();
-      connected = false;
-      selectedFile = null;
-      document.getElementById('qrCodeCanvas').innerHTML = '';
-      document.getElementById('qrPayload').textContent = '';
-      setTransferStatus('');
-    }
-
-    function setStatus(title, sub) {
-      const block = document.getElementById('statusBlock');
-      block.querySelector('.status-title').textContent = title;
-      block.querySelector('.status-sub').textContent = sub;
-    }
-
-    function setTransferStatus(text) {
-      document.getElementById('transferStatus').textContent = text;
-    }
-
-    function renderQrCode(code) {
-      const container = document.getElementById('qrCodeCanvas');
-      container.innerHTML = '';
-      // eslint-disable-next-line no-undef
-      new QRCode(container, {
-        text: code,
-        width: 160,
-        height: 160,
-      });
-      document.getElementById('qrPayload').textContent = code;
-    }
-
-    // Fired by the hidden <input type="file"> when the user picks a file.
-    async function handleFilePicked(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      selectedFile = file;
-      setTransferStatus(`Selected: ${file.name} — waiting for connection...`);
-
-      if (transfer.dataChannel && transfer.dataChannel.readyState === 'open') {
-        await sendSelectedFile();
-      }
-      // If not yet connected, onStatus's 'Connected — ready to send' fires
-      // once the data channel opens; sendSelectedFile() runs from there too.
-    }
-
-    async function sendSelectedFile() {
-      if (!selectedFile) return;
-      try {
-        setTransferStatus(`Sending ${selectedFile.name}...`);
-        await transfer.sendFile(selectedFile);
-        setTransferStatus(`Sent: ${selectedFile.name}`);
-      } catch (err) {
-        setTransferStatus('Send failed: ' + err.message);
-      }
-    }
-
-    async function showMyQrCode() {
-      // QR is rendered automatically once the room is created in openSend().
-      // This handler is kept for the button's onclick in the markup, in case
-      // you want to re-show/re-render the code on demand later.
-    }
-
-    // expose for inline onclick handlers in the markup above
-    window.openSend = openSend;
-    window.closeSend = closeSend;
-    window.showMyQrCode = showMyQrCode;
-    window.handleFilePicked = handleFilePicked;
-
+  <script>
     function openNotepad() {
       document.getElementById('notepadScreen').classList.add('open');
       document.getElementById('notepadTitle').focus();
